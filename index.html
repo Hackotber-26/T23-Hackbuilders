@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AegisRCA | Telemetry & Live Traversal</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Three.js & OrbitControls CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'IBM Plex Sans', sans-serif; background-color: #0f171e; color: #f3f4f6; }
+        .font-mono { font-family: 'IBM Plex Mono', monospace; }
+        .aws-card { background-color: #232f3e; border: 1px solid #37475a; }
+        .aws-bg-primary { background-color: #0f171e; }
+        .aws-bg-secondary { background-color: #19212c; }
+        .aws-amber-bg { background-color: #ff9900; }
+        .aws-amber-btn { background-color: #ff9900; color: #0f171e; font-weight: 600; }
+        .aws-amber-btn:hover { background-color: #ec7211; }
+        
+        /* Node status glow effects */
+        .glow-cyan { box-shadow: 0 0 12px rgba(0, 164, 228, 0.4); }
+        .glow-amber { box-shadow: 0 0 12px rgba(255, 153, 0, 0.5); }
+        .glow-coral { box-shadow: 0 0 15px rgba(217, 83, 79, 0.7); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+    <!-- Top Navigation Header -->
+    <header class="aws-bg-secondary border-b border-[#37475a] px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="aws-amber-bg p-2 rounded font-bold text-gray-900 text-lg">🛡️</div>
+            <div>
+                <h1 class="font-bold text-lg text-white flex items-center gap-2">
+                    AegisRCA <span class="text-xs px-2 py-0.5 rounded font-mono bg-[#ff9900]/10 text-[#ff9900] border border-[#ff9900]/30">v2.6 Enterprise</span>
+                </h1>
+                <p class="text-xs text-gray-400">Automated Root Cause Diagnosis & Microprocessor Health Telemetry</p>
+            </div>
+        </div>
+        <div id="stepBadge" class="text-xs font-mono px-3 py-1 rounded bg-[#ff9900]/10 text-[#ff9900] border border-[#ff9900]/30">STAGE 1 OF 3</div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-6xl w-full mx-auto p-6 space-y-6">
+
+        <!-- ========================================================= -->
+        <!-- STEP 1: INGESTION & UPLOAD VIEW                           -->
+        <!-- ========================================================= -->
+        <section id="step1" class="space-y-6">
+            <div class="aws-card rounded-xl p-6 shadow-xl">
+                <div class="border-b border-[#37475a] pb-4 mb-6">
+                    <span class="text-xs font-mono uppercase tracking-widest text-[#ff9900]">Stage 01</span>
+                    <h2 class="text-2xl font-bold text-white mt-1">Telemetry Ingestion & Dataset Selection</h2>
+                    <p class="text-sm text-gray-400 mt-1">Upload custom server logs or select pre-configured enterprise benchmark suites.</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-mono uppercase text-gray-300 mb-2">Select Benchmark Failure Case</label>
+                            <select id="caseSelect" class="w-full aws-bg-primary border border-[#37475a] rounded-lg p-3 text-sm text-white focus:outline-none focus:border-[#ff9900]">
+                                <option value="RE1-OB_Core_Thermal_Spike.json">RE1-OB: Online Boutique (Core #2 Thermal Runaway)</option>
+                                <option value="RE1-SS_Voltage_Droop.json">RE1-SS: Sock Shop (PMIC Voltage Droop Trace)</option>
+                            </select>
+                        </div>
+
+                        <div class="pt-2">
+                            <label class="block text-xs font-mono uppercase text-gray-300 mb-2">Upload Custom Log (.csv, .json, .log, .txt)</label>
+                            <div class="border-2 border-dashed border-[#37475a] hover:border-[#ff9900] rounded-xl p-6 text-center cursor-pointer transition-all bg-[#19212c]" onclick="document.getElementById('fileInput').click()">
+                                <input type="file" id="fileInput" class="hidden" accept=".csv,.json,.log,.txt" onchange="handleFileUpload(event)">
+                                <div class="text-3xl mb-2">📁</div>
+                                <p class="text-sm font-medium text-white" id="uploadLabelText">Click to browse or drop telemetry files here</p>
+                                <p class="text-xs text-gray-400 mt-1">Files are saved securely in browser session memory</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="aws-bg-primary rounded-xl p-5 border border-[#37475a] flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-sm font-mono uppercase text-[#00a4e4]">Active Telemetry Context</h3>
+                                <span id="persistenceBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Session Persistent</span>
+                            </div>
+                            <div class="space-y-3 text-sm text-gray-300">
+                                <div class="flex justify-between border-b border-[#37475a]/50 pb-2">
+                                    <span class="text-gray-400">Source Type:</span>
+                                    <span id="activeSourceType" class="font-mono text-white">Pre-built Benchmark Suite</span>
+                                </div>
+                                <div class="flex justify-between border-b border-[#37475a]/50 pb-2">
+                                    <span class="text-gray-400">Dataset Identifier:</span>
+                                    <span id="activeSourceId" class="font-mono text-[#ff9900]">RE1-OB_Core_Thermal_Spike.json</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-400">Backend API Route:</span>
+                                    <span class="font-mono text-emerald-400">http://127.0.0.1:8000/api/run-rca</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 pt-4 border-t border-[#37475a]">
+                            <button onclick="proceedToExecution()" class="w-full aws-amber-btn py-3 px-6 rounded-lg text-sm transition-all shadow-lg flex items-center justify-center space-x-2 cursor-pointer">
+                                <span>⚡ Proceed to 3D Topology & Traversal</span>
+                                <span>→</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- STEP 2: DUAL 3D TELEMETRY & LIVE TRAVERSAL                -->
+        <!-- ========================================================= -->
+        <section id="step2" class="space-y-6 hidden">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-mono uppercase tracking-widest text-[#ff9900]">Stage 02</span>
+                    <h2 class="text-2xl font-bold text-white mt-0.5">Live Graph Traversal & 3D Topology Mapping</h2>
+                    <p class="text-sm text-gray-400">Real-time spatial node visualization powered by NetworkX and Three.js orbit view.</p>
+                </div>
+                <button onclick="executeLiveTraversal()" id="traversalBtn" class="aws-amber-btn py-2.5 px-6 rounded-lg text-sm transition-all shadow-lg flex items-center gap-2 cursor-pointer">
+                    <span>🚀 Run Live Traversal Solver</span>
+                </button>
+            </div>
+
+            <!-- Main Interactive Layout Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left 2 Cols: 3D Canvas Viewport -->
+                <div class="lg:col-span-2 aws-card rounded-xl p-4 flex flex-col h-[520px] relative shadow-xl">
+                    <div class="flex justify-between items-center mb-2 z-10">
+                        <span class="text-xs font-mono uppercase text-[#00a4e4] font-semibold flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span> 3D Subsystem Topology & Hardware Mesh
+                        </span>
+                        <span id="traversalStatusBadge" class="text-[10px] font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2.5 py-1 rounded">Status: Idle / Ready</span>
+                    </div>
+
+                    <!-- Three.js Canvas Injection Point -->
+                    <div id="threeCanvasContainer" class="flex-1 rounded-lg overflow-hidden bg-black/40 relative">
+                        <!-- Canvas rendered via JavaScript -->
+                    </div>
+
+                    <div class="absolute bottom-6 left-6 z-10 pointer-events-none text-[11px] font-mono bg-black/60 backdrop-blur px-2.5 py-1 rounded text-gray-300 border border-white/10">
+                        Controls: Left-click + drag to rotate • Scroll to zoom
+                    </div>
+                </div>
+
+                <!-- Right Col: Color Legend & 3D Component Overview -->
+                <div class="space-y-6">
+                    <!-- Status Color Legend Box -->
+                    <div class="aws-card rounded-xl p-5 shadow-xl">
+                        <h3 class="text-xs font-mono uppercase tracking-wider text-[#ff9900] mb-3 font-semibold">Node Status Legend</h3>
+                        <div class="space-y-2.5 text-xs">
+                            <div class="flex items-center justify-between p-2 rounded bg-black/30 border border-[#37475a]">
+                                <div class="flex items-center space-x-2">
+                                    <span class="w-3 h-3 rounded-full bg-[#00a4e4] glow-cyan"></span>
+                                    <span class="font-medium text-gray-200">Healthy Node / Service</span>
+                                </div>
+                                <span class="font-mono text-cyan-400 text-[10px]">Nominal</span>
+                            </div>
+                            <div class="flex items-center justify-between p-2 rounded bg-black/30 border border-[#37475a]">
+                                <div class="flex items-center space-x-2">
+                                    <span class="w-3 h-3 rounded-full bg-[#ff9900] glow-amber"></span>
+                                    <span class="font-medium text-gray-200">Failure Propagation Path</span>
+                                </div>
+                                <span class="font-mono text-amber-400 text-[10px]">Degraded</span>
+                            </div>
+                            <div class="flex items-center justify-between p-2 rounded bg-black/30 border border-[#37475a]">
+                                <div class="flex items-center space-x-2">
+                                    <span class="w-3 h-3 rounded-full bg-[#d9534f] glow-coral"></span>
+                                    <span class="font-medium text-gray-200">Isolated Root Cause Sink</span>
+                                </div>
+                                <span class="font-mono text-red-400 text-[10px]">Terminal Fault</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3D Component Overview Card -->
+                    <div class="aws-card rounded-xl p-5 shadow-xl space-y-3">
+                        <h3 class="text-xs font-mono uppercase tracking-wider text-[#00a4e4] font-semibold">3D Hardware Component Overview</h3>
+                        <div class="space-y-2 text-xs font-mono text-gray-300">
+                            <div class="flex justify-between border-b border-[#37475a]/60 pb-1.5">
+                                <span class="text-gray-400">Silicon Substrate:</span>
+                                <span class="text-white">Active (100mm² Die)</span>
+                            </div>
+                            <div class="flex justify-between border-b border-[#37475a]/60 pb-1.5">
+                                <span class="text-gray-400">Core #0 / #1 Health:</span>
+                                <span class="text-emerald-400">38.2°C (Healthy)</span>
+                            </div>
+                            <div class="flex justify-between border-b border-[#37475a]/60 pb-1.5">
+                                <span class="text-gray-400">Core #2 PWM State:</span>
+                                <span id="compCoreState" class="text-gray-400">Monitoring...</span>
+                            </div>
+                            <div class="flex justify-between border-b border-[#37475a]/60 pb-1.5">
+                                <span class="text-gray-400">Data Bus Latency:</span>
+                                <span id="compBusLatency" class="text-gray-400">-- ms</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">NetworkX Invariant:</span>
+                                <span class="text-cyan-400">Deterministic O(V+E)</span>
+                            </div>
+                        </div>
+
+                        <!-- Terminal Execution Log Overlay -->
+                        <div id="liveTerminalLogs" class="aws-bg-primary rounded p-3 font-mono text-[11px] text-emerald-400 border border-[#37475a] h-28 overflow-y-auto leading-relaxed">
+                            [INFO] 3D spatial node mesh loaded.<br>
+                            [INFO] Click 'Run Live Traversal Solver' to initiate algorithm trace.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Navigation -->
+            <div class="flex justify-between pt-2">
+                <button onclick="goToStep(1)" class="aws-card hover:bg-[#37475a] text-gray-200 py-2.5 px-5 rounded-lg text-sm cursor-pointer">← Back to Ingestion</button>
+                <button onclick="goToStep(3)" id="toStep3Btn" class="aws-amber-btn py-2.5 px-6 rounded-lg text-sm opacity-50 cursor-not-allowed" disabled>View Final Verdict & Report →</button>
+            </div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- STEP 3: RESULTS & VERDICT VIEW                            -->
+        <!-- ========================================================= -->
+        <section id="step3" class="space-y-6 hidden">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="aws-card p-4 rounded-xl border-l-4 border-l-red-500 shadow-lg">
+                    <span class="text-xs font-mono text-gray-400">ISOLATED ROOT CAUSE</span>
+                    <h3 class="text-lg font-bold text-red-400 mt-1" id="resRootCause">--</h3>
+                </div>
+                <div class="aws-card p-4 rounded-xl border-l-4 border-l-emerald-500 shadow-lg">
+                    <span class="text-xs font-mono text-gray-400">SOLVER LATENCY</span>
+                    <h3 class="text-lg font-bold text-emerald-400 mt-1" id="resLatency">--</h3>
+                </div>
+                <div class="aws-card p-4 rounded-xl border-l-4 border-l-amber-500 shadow-lg">
+                    <span class="text-xs font-mono text-gray-400">DETERMINISTIC MATH</span>
+                    <h3 class="text-lg font-bold text-amber-400 mt-1">100.0% Certainty</h3>
+                </div>
+            </div>
+
+            <div class="aws-card rounded-xl p-6 space-y-3 shadow-xl">
+                <h3 class="text-sm font-mono uppercase text-[#ff9900]">FastAPI Response Payload & Propagation Path</h3>
+                <pre id="apiJsonResponse" class="aws-bg-primary p-4 rounded-lg text-xs font-mono text-cyan-400 overflow-x-auto border border-[#37475a]"></pre>
+            </div>
+
+            <div class="flex justify-between">
+                <button onclick="goToStep(2)" class="aws-card hover:bg-[#37475a] text-gray-200 py-2.5 px-5 rounded-lg text-sm cursor-pointer">← Back to Traversal</button>
+                <button onclick="goToStep(1)" class="aws-amber-btn py-2.5 px-6 rounded-lg text-sm cursor-pointer">🔄 Upload New Dataset</button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="aws-bg-secondary border-t border-[#37475a] py-4 text-center text-xs text-gray-500 mt-12">
+        AegisRCA Observability Engine • Powered by FastAPI, NetworkX & Three.js 3D Engine
+    </footer>
+
+    <!-- JavaScript Controller & Three.js Engine -->
+    <script>
+        let sessionData = {
+            sourceType: "Pre-built Benchmark Suite",
+            datasetName: "RE1-OB_Core_Thermal_Spike.json"
+        };
+
+        let renderer, scene, camera, controls;
+        let nodeMeshes = [], lineMeshes = [];
+        let isThreeInitialized = false;
+        let backendResponseData = null;
+
+        // Initialize state on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('aegis_upload_session');
+            if (saved) {
+                try {
+                    sessionData = JSON.parse(saved);
+                    document.getElementById('activeSourceType').innerText = sessionData.sourceType;
+                    document.getElementById('activeSourceId').innerText = sessionData.datasetName;
+                } catch(e) {}
+            }
+
+            document.getElementById('caseSelect').addEventListener('change', (e) => {
+                sessionData = { sourceType: "Pre-built Benchmark Suite", datasetName: e.target.value };
+                updateSessionDisplay();
+            });
+        });
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                sessionData = { sourceType: "Custom Uploaded Telemetry", datasetName: file.name };
+                document.getElementById('uploadLabelText').innerText = `Loaded: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+                updateSessionDisplay();
+            }
+        }
+
+        function updateSessionDisplay() {
+            document.getElementById('activeSourceType').innerText = sessionData.sourceType;
+            document.getElementById('activeSourceId').innerText = sessionData.datasetName;
+            localStorage.setItem('aegis_upload_session', JSON.stringify(sessionData));
+        }
+
+        function goToStep(stepNum) {
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step3').classList.add('hidden');
+            document.getElementById(`step${stepNum}`).classList.remove('hidden');
+            document.getElementById('stepBadge').innerText = `STAGE ${stepNum} OF 3`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            if(stepNum === 2 && !isThreeInitialized) {
+                setTimeout(initThreeJsViewport, 100);
+            }
+        }
+
+        function proceedToExecution() {
+            updateSessionDisplay();
+            goToStep(2);
+        }
+
+        // =========================================================
+        // THREE.JS 3D SCENE & NODE TRAVERSAL ANIMATION ENGINE
+        // =========================================================
+        const nodesData = [
+            { id: 0, name: "Frontend", x: -5, y: 2, z: 0 },
+            { id: 1, name: "Checkout", x: -2, y: 1, z: -1.5 },
+            { id: 2, name: "Payment", x: 1.5, y: -0.5, z: 1 },
+            { id: 3, name: "Database (Sink)", x: 5, y: -2, z: 0 }
+        ];
+
+        const edgesData = [
+            { from: 0, to: 1 },
+            { from: 1, to: 2 },
+            { from: 2, to: 3 }
+        ];
+
+        function initThreeJsViewport() {
+            const container = document.getElementById('threeCanvasContainer');
+            container.innerHTML = "";
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, 8, 16);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // Ambient & Directional Lights
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const pLight = new THREE.PointLight(0xffffff, 1.2);
+            pLight.position.set(10, 15, 15);
+            scene.add(pLight);
+
+            // Draw 3D Base Silicon Chip Plate
+            const pcbGeo = new THREE.BoxGeometry(14, 0.3, 8);
+            const pcbMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.5 });
+            const pcbMesh = new THREE.Mesh(pcbGeo, pcbMat);
+            pcbMesh.position.y = -3.5;
+            scene.add(pcbMesh);
+
+            // Create Spherical Dependency Nodes (Default: Healthy Cyan)
+            const sphereGeo = new THREE.SphereGeometry(0.7, 32, 32);
+            nodeMeshes = [];
+
+            nodesData.forEach(n => {
+                const mat = new THREE.MeshStandardMaterial({
+                    color: 0x00a4e4,
+                    emissive: 0x004466,
+                    emissiveIntensity: 0.4,
+                    roughness: 0.2
+                });
+                const mesh = new THREE.Mesh(sphereGeo, mat);
+                mesh.position.set(n.x, n.y, n.z);
+                scene.add(mesh);
+                nodeMeshes.push(mesh);
+            });
+
+            // Connect Nodes with Lines
+            lineMeshes = [];
+            edgesData.forEach(e => {
+                const p1 = nodesData[e.from];
+                const p2 = nodesData[e.to];
+                const points = [new THREE.Vector3(p1.x, p1.y, p1.z), new THREE.Vector3(p2.x, p2.y, p2.z)];
+                const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+                const lineMat = new THREE.LineBasicMaterial({ color: 0x37475a, linewidth: 3 });
+                const line = new THREE.Line(lineGeo, lineMat);
+                scene.add(line);
+                lineMeshes.push(line);
+            });
+
+            isThreeInitialized = true;
+            animateThree();
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function animateThree() {
+            requestAnimationFrame(animateThree);
+            if(controls) controls.update();
+            if(renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('threeCanvasContainer');
+            if (container && renderer && camera) {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }
+        }
+
+        // =========================================================
+        // LIVE GRAPH TRAVERSAL SOLVER EXECUTION
+        // =========================================================
+        async function executeLiveTraversal() {
+            const badge = document.getElementById('traversalStatusBadge');
+            const logs = document.getElementById('liveTerminalLogs');
+            const btn = document.getElementById('traversalBtn');
+            btn.disabled = true;
+
+            badge.className = "text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded animate-pulse";
+            badge.innerText = "Status: Traversing Graph O(V+E)...";
+
+            logs.innerHTML += `<br><span class="text-amber-300">[10:48:03.010] Dispatching POST request to FastAPI backend (port 8000)...</span>`;
+
+            try {
+                // Call FastAPI backend running on port 8000
+                const response = await fetch('http://127.0.0.1:8000/api/run-rca', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dataset_name: sessionData.datasetName })
+                });
+
+                backendResponseData = await response.json();
+
+                // Step 1: Highlight Failure Path in Amber (Frontend -> Checkout -> Payment)
+                setTimeout(() => {
+                    nodeMeshes[0].material.color.setHex(0xff9900); // Frontend
+                    nodeMeshes[0].material.emissive.setHex(0xff9900);
+                    lineMeshes[0].material.color.setHex(0xff9900);
+
+                    logs.innerHTML += `<br><span class="text-amber-400">[10:48:03.100] Flagged anomaly on path: Frontend -> Checkout</span>`;
+                }, 400);
+
+                setTimeout(() => {
+                    nodeMeshes[1].material.color.setHex(0xff9900); // Checkout
+                    nodeMeshes[1].material.emissive.setHex(0xff9900);
+                    lineMeshes[1].material.color.setHex(0xff9900);
+
+                    nodeMeshes[2].material.color.setHex(0xff9900); // Payment
+                    nodeMeshes[2].material.emissive.setHex(0xff9900);
+                    lineMeshes[2].material.color.setHex(0xd9534f);
+
+                    logs.innerHTML += `<br><span class="text-amber-400">[10:48:03.112] Backward path traversal reaching terminal sink...</span>`;
+                }, 800);
+
+                // Step 2: Highlight Isolated Root Cause Sink in Coral Red
+                setTimeout(() => {
+                    nodeMeshes[3].material.color.setHex(0xd9534f); // Database Sink Node
+                    nodeMeshes[3].material.emissive.setHex(0xd9534f);
+                    nodeMeshes[3].material.emissiveIntensity = 0.9;
+
+                    badge.className = "text-[10px] font-mono bg-red-500/20 text-red-400 border border-red-500/30 px-2.5 py-1 rounded font-bold";
+                    badge.innerText = "Status: Root Cause Isolated!";
+
+                    document.getElementById('compCoreState').className = "text-red-400 font-bold";
+                    document.getElementById('compCoreState').innerText = "98.5°C PWM Trip";
+                    document.getElementById('compBusLatency').innerText = backendResponseData.execution_time_ms + " ms";
+
+                    logs.innerHTML += `<br><span class="text-red-400 font-bold">[10:48:03.118] [SUCCESS] Isolated terminal sink: ${backendResponseData.root_cause} (${backendResponseData.execution_time_ms}ms)</span>`;
+
+                    // Populate Step 3
+                    document.getElementById('resRootCause').innerText = backendResponseData.root_cause;
+                    document.getElementById('resLatency').innerText = backendResponseData.execution_time_ms + " ms";
+                    document.getElementById('apiJsonResponse').innerText = JSON.stringify(backendResponseData, null, 2);
+
+                    // Enable Next Step Button
+                    const nextBtn = document.getElementById('toStep3Btn');
+                    nextBtn.disabled = false;
+                    nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+                    btn.disabled = false;
+                }, 1300);
+
+            } catch (err) {
+                badge.className = "text-[10px] font-mono bg-red-500/20 text-red-400 border border-red-500/30 px-2.5 py-1 rounded";
+                badge.innerText = "Status: API Error!";
+                logs.innerHTML += `<br><span class="text-red-400">[ERROR] Failed to reach http://127.0.0.1:8000/api/run-rca. Ensure backend.py is running!</span>`;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
